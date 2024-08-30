@@ -1,4 +1,3 @@
-import torch
 from torch import Tensor
 from torch.nn import Module
 
@@ -18,11 +17,11 @@ class Naked(Module):
           :math:`H_{\\text{out}}` is the number of output features.
 
     Examples:
-
+        >>> import torch
         >>> from pfhedge.nn import Naked
         >>>
         >>> m = Naked()
-        >>> input = torch.empty((2, 3))
+        >>> input = torch.zeros((2, 3))
         >>> m(input)
         tensor([[0.],
                 [0.]])

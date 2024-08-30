@@ -10,35 +10,31 @@ from pfhedge.nn.functional import lookback_payoff
 
 from ..primary.base import BasePrimary
 from .base import BaseDerivative
-from .base import BaseOption
+from .base import OptionMixin
 
 
-class LookbackOption(BaseOption):
+class LookbackOption(BaseDerivative, OptionMixin):
     r"""Lookback option with fixed strike.
 
-    A lookback call option provides its holder the right to buy an underlying with
-    the strike price and to sell with the highest price until the date of maturity.
-
-    A lookback put option provides its holder the right to sell an underlying with
-    the strike price and to buy with the lowest price until the date of maturity.
-
-    The payoff of a lookback call option is given by:
+    The payoff of a lookback call option is given by
 
     .. math::
-        \mathrm{payoff} = \max(\mathrm{Max} - K, 0)
+        \mathrm{payoff} = \max(\mathrm{Max} - K, 0) ,
 
-    Here, :math:`\mathrm{Max}` is the maximum of the underlying asset's price
-    until maturity and :math:`K` is the strike price (`strike`) of the option.
+    where
+    :math:`\mathrm{Max}` is the maximum of the underlier's spot price until maturity and
+    :math:`K` is the strike.
 
-    The payoff of a lookback put option is given by:
+    The payoff of a lookback put option is given by
 
     .. math::
-        \mathrm{payoff} = \max(K - \mathrm{Min}, 0)
+        \mathrm{payoff} = \max(K - \mathrm{Min}, 0) ,
 
-    Here, :math:`\mathrm{Min}` is the minimum of the underlying asset's price.
+    where
+    :math:`\mathrm{Max}` is the minimum of the underlier's spot price until maturity.
 
     .. seealso::
-        :func:`pfhedge.nn.functional.lookback_payoff`: Payoff function.
+        - :func:`pfhedge.nn.functional.lookback_payoff`
 
     Args:
         underlier (:class:`BasePrimary`): The underlying instrument of the option.
@@ -76,7 +72,7 @@ class LookbackOption(BaseOption):
         device: Optional[torch.device] = None,
     ) -> None:
         super().__init__()
-        self.underlier = underlier
+        self.register_underlier("underlier", underlier)
         self.call = call
         self.strike = strike
         self.maturity = maturity
@@ -107,6 +103,8 @@ _set_attr_and_docstring(LookbackOption, "to", BaseDerivative.to)
 _set_attr_and_docstring(LookbackOption, "ul", BaseDerivative.ul)
 _set_attr_and_docstring(LookbackOption, "list", BaseDerivative.list)
 _set_docstring(LookbackOption, "payoff", BaseDerivative.payoff)
-_set_attr_and_docstring(LookbackOption, "moneyness", BaseOption.moneyness)
-_set_attr_and_docstring(LookbackOption, "log_moneyness", BaseOption.log_moneyness)
-_set_attr_and_docstring(LookbackOption, "time_to_maturity", BaseOption.time_to_maturity)
+_set_attr_and_docstring(LookbackOption, "moneyness", OptionMixin.moneyness)
+_set_attr_and_docstring(LookbackOption, "log_moneyness", OptionMixin.log_moneyness)
+_set_attr_and_docstring(
+    LookbackOption, "time_to_maturity", OptionMixin.time_to_maturity
+)

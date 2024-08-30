@@ -1,5 +1,6 @@
 from abc import ABC
 from abc import abstractmethod
+from typing import Any
 from typing import List
 from typing import Optional
 from typing import TypeVar
@@ -21,6 +22,11 @@ class BaseInstrument(ABC):
     def spot(self) -> Tensor:
         """Returns the spot price of self."""
 
+    @property
+    @abstractmethod
+    def is_listed(self) -> bool:
+        """Returns whether it is listed or not."""
+
     @abstractmethod
     @no_type_check
     def simulate(self, n_paths: int, time_horizon: float, **kwargs) -> None:
@@ -37,7 +43,7 @@ class BaseInstrument(ABC):
         """
 
     @abstractmethod
-    def to(self: T, *args, **kwargs) -> T:
+    def to(self: T, *args: Any, **kwargs: Any) -> T:
         """Moves and/or casts the buffers of the instrument.
 
         This can be called as
@@ -139,6 +145,18 @@ class BaseInstrument(ABC):
         """
         return self.to(torch.float16)
 
+    def float64(self: T) -> T:
+        """Alias for :meth:`double()`."""
+        return self.double()
+
+    def float32(self: T) -> T:
+        """Alias for :meth:`float()`."""
+        return self.float()
+
+    def float16(self: T) -> T:
+        """Alias for :meth:`half()`."""
+        return self.half()
+
     def bfloat16(self: T) -> T:
         """Casts all floating point parameters and buffers to
         ``torch.bfloat16`` datatype.
@@ -190,8 +208,8 @@ class BaseInstrument(ABC):
 
 
 class Instrument(BaseInstrument):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, **kwargs) -> None:  # type: ignore
+        super().__init__(*args, **kwargs)  # type: ignore
         raise DeprecationWarning(
             "Instrument is deprecated. Use BaseInstrument instead."
         )

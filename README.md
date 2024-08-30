@@ -6,6 +6,7 @@
 [![codecov](https://codecov.io/gh/pfnet-research/pfhedge/branch/main/graph/badge.svg?token=GpXV1ldVCN)](https://codecov.io/gh/pfnet-research/pfhedge)
 [![downloads](https://img.shields.io/pypi/dm/pfhedge)](https://pypi.org/project/pfhedge)
 [![code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+![pytorch](https://img.shields.io/badge/torch-1.9.0--%20%7C%202.0.0---red)
 
 **PFHedge** is a [PyTorch](https://pytorch.org/)-based framework for [Deep Hedging][deep-hedging-arxiv].
 
@@ -218,10 +219,14 @@ The input/output shapes is `(N, H_in) -> (N, 1)`, where `N` is the number of Mon
 Here we show an example of **No-Transaction Band Network**, which is proposed in [Imaki *et al.* 21][ntb-network-arxiv].
 
 ```py
+import torch
 import torch.nn.functional as fn
+from torch import Tensor
 from torch.nn import Module
+
 from pfhedge.nn import BlackScholes
 from pfhedge.nn import Clamp
+from pfhedge.nn import Hedger
 from pfhedge.nn import MultiLayerPerceptron
 
 
@@ -237,18 +242,18 @@ class NoTransactionBandNet(Module):
         return self.delta.inputs() + ["prev_hedge"]
 
     def forward(self, input: Tensor) -> Tensor:
-        prev_hedge = input[:, [-1]]
+        prev_hedge = input[..., [-1]]
 
-        delta = self.delta(input[:, :-1]).reshape(-1, 1)
-        width = self.mlp(input[:, :-1])
+        delta = self.delta(input[..., :-1])
+        width = self.mlp(input[..., :-1])
 
-        min = delta - fn.leaky_relu(width[:, [0]])
-        max = delta + fn.leaky_relu(width[:, [1]])
+        min = delta - fn.leaky_relu(width[..., [0]])
+        max = delta + fn.leaky_relu(width[..., [1]])
 
         return self.clamp(prev_hedge, min=min, max=max)
 
 
-model = NoTransactionBandNet()
+model = NoTransactionBandNet(derivative)
 hedger = Hedger(model, inputs=model.inputs())
 ```
 
@@ -286,7 +291,7 @@ Any contributions to PFHedge are more than welcome!
 
 Please take a look at [CONTRIBUTING.md](.github/CONTRIBUTING.md) before creating a pull request.
 
-This project is owned by [Preferred Networks](https://www.preferred.jp/en/) and maintained by [Shota Imaki](https://github.com/simaki).
+This project is owned by [Preferred Networks](https://www.preferred.jp/en/) and maintained by [Shota Imaki](https://github.com/simaki) and [Masanori Hirano](https://github.com/masanorihirano).
 
 ## References
 

@@ -10,31 +10,28 @@ from pfhedge.nn.functional import european_payoff
 
 from ..primary.base import BasePrimary
 from .base import BaseDerivative
-from .base import BaseOption
+from .base import OptionMixin
 
 
-class EuropeanOption(BaseOption):
+class EuropeanOption(BaseDerivative, OptionMixin):
     r"""European option.
-
-    A European option provides its holder the right to buy (for call option)
-    or sell (for put option) an underlying asset with the strike price
-    on the date of maturity.
 
     The payoff of a European call option is given by:
 
     .. math::
-        \mathrm{payoff} = \max(S - K, 0)
+        \mathrm{payoff} = \max(S - K, 0) ,
 
-    Here, :math:`S` is the underlying asset's price at maturity and
-    :math:`K` is the strike price (`strike`) of the option.
+    where
+    :math:`S` is the underlier's spot price at maturity and
+    :math:`K` is the strike.
 
     The payoff of a European put option is given by:
 
     .. math::
-        \mathrm{payoff} = \max(K - S, 0)
+        \mathrm{payoff} = \max(K - S, 0) .
 
     .. seealso::
-        :func:`pfhedge.nn.functional.european_payoff`: Payoff function.
+        - :func:`pfhedge.nn.functional.european_payoff`
 
     Args:
         underlier (:class:`BasePrimary`): The underlying instrument of the option.
@@ -121,7 +118,7 @@ class EuropeanOption(BaseOption):
         device: Optional[torch.device] = None,
     ) -> None:
         super().__init__()
-        self.underlier = underlier
+        self.register_underlier("underlier", underlier)
         self.call = call
         self.strike = strike
         self.maturity = maturity
@@ -152,6 +149,8 @@ _set_attr_and_docstring(EuropeanOption, "to", BaseDerivative.to)
 _set_attr_and_docstring(EuropeanOption, "ul", BaseDerivative.ul)
 _set_attr_and_docstring(EuropeanOption, "list", BaseDerivative.list)
 _set_docstring(EuropeanOption, "payoff", BaseDerivative.payoff)
-_set_attr_and_docstring(EuropeanOption, "moneyness", BaseOption.moneyness)
-_set_attr_and_docstring(EuropeanOption, "log_moneyness", BaseOption.log_moneyness)
-_set_attr_and_docstring(EuropeanOption, "time_to_maturity", BaseOption.time_to_maturity)
+_set_attr_and_docstring(EuropeanOption, "moneyness", OptionMixin.moneyness)
+_set_attr_and_docstring(EuropeanOption, "log_moneyness", OptionMixin.log_moneyness)
+_set_attr_and_docstring(
+    EuropeanOption, "time_to_maturity", OptionMixin.time_to_maturity
+)

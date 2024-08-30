@@ -1,4 +1,5 @@
 from numbers import Real
+from typing import Any
 from typing import Optional
 from typing import Union
 
@@ -16,7 +17,7 @@ def parse_spot(
     strike: Optional[Tensor] = None,
     moneyness: Optional[Tensor] = None,
     log_moneyness: Optional[Tensor] = None,
-    **kwargs
+    **kwargs: Any,
 ) -> Tensor:
     spot = _as_optional_tensor(spot)
     strike = _as_optional_tensor(strike)
@@ -34,7 +35,10 @@ def parse_spot(
 
 
 def parse_volatility(
-    *, volatility: Optional[Tensor] = None, variance: Optional[Tensor] = None, **kwargs
+    *,
+    volatility: Optional[Tensor] = None,
+    variance: Optional[Tensor] = None,
+    **kwargs: Any,
 ) -> Tensor:
     if volatility is not None:
         return volatility
@@ -42,3 +46,12 @@ def parse_volatility(
         return variance.clamp(min=0.0).sqrt()
     else:
         raise ValueError("Insufficient parameters to parse volatility")
+
+
+def parse_time_to_maturity(
+    *, time_to_maturity: Optional[Tensor] = None, **kwargs: Any
+) -> Tensor:
+    if time_to_maturity is not None:
+        return time_to_maturity
+    else:
+        raise ValueError("Insufficient parameters to parse time_to_maturity")

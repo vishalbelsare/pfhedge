@@ -10,19 +10,11 @@ from pfhedge.nn.functional import american_binary_payoff
 
 from ..primary.base import BasePrimary
 from .base import BaseDerivative
-from .base import BaseOption
+from .base import OptionMixin
 
 
-class AmericanBinaryOption(BaseOption):
-    r"""American binary Option.
-
-    An American binary call option pays an unit amount of cash if and only if
-    the maximum of the underlying asset's price until maturity is equal or greater
-    than the strike price.
-
-    An American binary put option pays an unit amount of cash if and only if
-    the minimum of the underlying asset's price until maturity is equal or smaller
-    than the strike price.
+class AmericanBinaryOption(BaseDerivative, OptionMixin):
+    r"""American binary option.
 
     The payoff of an American binary call option is given by:
 
@@ -31,10 +23,11 @@ class AmericanBinaryOption(BaseOption):
         \begin{cases}
             1 & (\mathrm{Max} \geq K) \\
             0 & (\text{otherwise})
-        \end{cases}
+        \end{cases} ,
 
-    Here, :math:`\mathrm{Max}` is the maximum of the underlying asset's price
-    until maturity and :math:`K` is the strike price (`strike`) of the option.
+    where
+    :math:`\mathrm{Max}` is the maximum of the underlier's spot price until maturity and
+    :math:`K` is the strike.
 
     The payoff of an American binary put option is given by:
 
@@ -43,12 +36,13 @@ class AmericanBinaryOption(BaseOption):
         \begin{cases}
             1 & (\mathrm{Min} \leq K) \\
             0 & (\text{otherwise})
-        \end{cases}
+        \end{cases} ,
 
-    Here, :math:`\mathrm{Min}` is the minimum of the underlying asset's price.
+    where
+    :math:`\mathrm{Min}` is the minimum of the underlier's spot price until maturity.
 
     .. seealso::
-        :func:`pfhedge.nn.functional.american_binary_payoff`: Payoff function.
+        - :func:`pfhedge.nn.functional.american_binary_payoff`
 
     Args:
         underlier (:class:`BasePrimary`): The underlying instrument of the option.
@@ -87,7 +81,7 @@ class AmericanBinaryOption(BaseOption):
         device: Optional[torch.device] = None,
     ) -> None:
         super().__init__()
-        self.underlier = underlier
+        self.register_underlier("underlier", underlier)
         self.call = call
         self.strike = strike
         self.maturity = maturity
@@ -120,8 +114,10 @@ _set_attr_and_docstring(AmericanBinaryOption, "to", BaseDerivative.to)
 _set_attr_and_docstring(AmericanBinaryOption, "ul", BaseDerivative.ul)
 _set_attr_and_docstring(AmericanBinaryOption, "list", BaseDerivative.list)
 _set_docstring(AmericanBinaryOption, "payoff", BaseDerivative.payoff)
-_set_attr_and_docstring(AmericanBinaryOption, "moneyness", BaseOption.moneyness)
-_set_attr_and_docstring(AmericanBinaryOption, "log_moneyness", BaseOption.log_moneyness)
+_set_attr_and_docstring(AmericanBinaryOption, "moneyness", OptionMixin.moneyness)
 _set_attr_and_docstring(
-    AmericanBinaryOption, "time_to_maturity", BaseOption.time_to_maturity
+    AmericanBinaryOption, "log_moneyness", OptionMixin.log_moneyness
+)
+_set_attr_and_docstring(
+    AmericanBinaryOption, "time_to_maturity", OptionMixin.time_to_maturity
 )

@@ -1,10 +1,12 @@
 from abc import abstractmethod
 from collections import OrderedDict
+from typing import Any
 from typing import Dict
 from typing import Iterator
 from typing import Optional
 from typing import Tuple
 from typing import TypeVar
+from typing import Union
 from typing import no_type_check
 
 import torch
@@ -40,18 +42,18 @@ class BasePrimary(BaseInstrument):
 
     dt: float
     cost: float
-    _buffers: Dict[str, Optional[Tensor]]
+    _buffers: Dict[str, Tensor]
     dtype: Optional[torch.dtype]
     device: Optional[torch.device]
 
     def __init__(self) -> None:
         super().__init__()
         self._buffers = OrderedDict()
-        self.register_buffer("spot", None)
 
     @property
     def default_init_state(self) -> Tuple[TensorOrScalar, ...]:
         """Returns the default initial state of simulation."""
+        return ()
 
     # TODO(simaki): Remove @no_type_check once BrownianStock and HestonStock get
     #   unified signatures.
@@ -78,22 +80,22 @@ class BasePrimary(BaseInstrument):
                 (See :attr:`default_init_state`).
         """
 
-    def register_buffer(self, name: str, tensor: Optional[Tensor]) -> None:
+    def register_buffer(self, name: str, tensor: Tensor) -> None:
         """Adds a buffer to the instrument.
         The dtype and device of the buffer are the instrument's dtype and device.
 
         Buffers can be accessed as attributes using given names.
 
         Args:
-            name (string): name of the buffer. The buffer can be accessed
-                from this module using the given name
+            name (str): name of the buffer. The buffer can be accessed
+                from this module using the given name.
             tensor (Tensor or None): buffer to be registered. If ``None``, then
                 operations that run on buffers, such as :attr:`cuda`, are ignored.
         """
         # Implementation here refers to torch.nn.Module.register_buffer.
         if "_buffers" not in self.__dict__:
             raise AttributeError("cannot assign buffer before __init__() call")
-        elif not isinstance(name, torch._six.string_classes):
+        elif not isinstance(name, (str, bytes)):
             raise TypeError(
                 "buffer name should be a string. " "Got {}".format(torch.typename(name))
             )
@@ -125,7 +127,7 @@ class BasePrimary(BaseInstrument):
                 yield name, buffer
 
     def buffers(self) -> Iterator[Tensor]:
-        r"""Returns an iterator over module buffers.
+        """Returns an iterator over module buffers.
 
         Yields:
             torch.Tensor: module buffer
@@ -133,14 +135,22 @@ class BasePrimary(BaseInstrument):
         for _, buffer in self.named_buffers():
             yield buffer
 
-    def __getattr__(self, name: str) -> Tensor:
+    def get_buffer(self, name: str) -> Tensor:
+        """Returns the buffer given by target if it exists, otherwise throws an error.
+
+        Args:
+            name (str): the name of the buffer.
+
+        Returns:
+            torch.Tensor
+        """
         if "_buffers" in self.__dict__:
-            _buffers = self.__dict__["_buffers"]
-            if name in _buffers:
-                return _buffers[name]
-        raise AttributeError(
-            "'{}' object has no attribute '{}'".format(type(self).__name__, name)
-        )
+            if name in self._buffers:
+                return self._buffers[name]
+        raise AttributeError(self._get_name() + " has no buffer named " + name)
+
+    def __getattr__(self, name: str) -> Tensor:
+        return self.get_buffer(name)
 
     @property
     def spot(self) -> Tensor:
@@ -154,13 +164,16 @@ class BasePrimary(BaseInstrument):
             "Asset may not be simulated."
         )
 
-    def to(self: T, *args, **kwargs) -> T:
+    @property
+    def is_listed(self) -> bool:
+        return True
+
+    def to(self: T, *args: Any, **kwargs: Any) -> T:
         device, dtype, *_ = self._parse_to(*args, **kwargs)
 
         if dtype is not None and not dtype.is_floating_point:
             raise TypeError(
-                "to() only accepts floating point "
-                "dtypes, but got desired dtype=" + str(dtype)
+                f"to() only accepts floating point dtypes, but got desired dtype={dtype}"
             )
 
         if not hasattr(self, "dtype") or dtype is not None:
@@ -174,7 +187,12 @@ class BasePrimary(BaseInstrument):
         return self
 
     @staticmethod
-    def _parse_to(*args, **kwargs):
+    def _parse_to(
+        *args: Any, **kwargs: Any
+    ) -> Union[
+        Tuple[torch.device, torch.dtype],
+        Tuple[torch.device, torch.dtype, bool, torch.memory_format],
+    ]:
         # Can be called as:
         #   to(device=None, dtype=None)
         #   to(tensor)
@@ -182,10 +200,10 @@ class BasePrimary(BaseInstrument):
         # and return a tuple (device, dtype, ...)
         if len(args) > 0 and isinstance(args[0], BaseInstrument):
             instrument = args[0]
-            return (getattr(instrument, "device"), getattr(instrument, "dtype"))
+            return getattr(instrument, "device"), getattr(instrument, "dtype")
         elif "instrument" in kwargs:
             instrument = kwargs["instrument"]
-            return (getattr(instrument, "device"), getattr(instrument, "dtype"))
+            return getattr(instrument, "device"), getattr(instrument, "dtype")
         else:
             return torch._C._nn._parse_to(*args, **kwargs)
 
@@ -200,8 +218,8 @@ class BasePrimary(BaseInstrument):
 
 
 class Primary(BasePrimary):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, **kwargs):  # type: ignore
+        super().__init__(*args, **kwargs)  # type: ignore
         raise DeprecationWarning("Primary is deprecated. Use BasePrimary instead.")
 
 

@@ -1,41 +1,49 @@
 from abc import ABC
+from abc import abstractmethod
 from typing import Callable
 
 import torch
 from torch import Tensor
 from torch.nn import Module
-from torch.nn import Parameter
+from torch.nn.parameter import Parameter
 
 from pfhedge._utils.bisect import bisect
 from pfhedge._utils.str import _format_float
+from pfhedge._utils.typing import TensorOrScalar
 
 from ..functional import entropic_risk_measure
 from ..functional import exp_utility
 from ..functional import expected_shortfall
 from ..functional import isoelastic_utility
+from ..functional import quadratic_cvar
 
 
 class HedgeLoss(Module, ABC):
     """Base class for hedging criteria."""
 
-    def forward(self, input: Tensor) -> Tensor:
+    @abstractmethod
+    def forward(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
         """Returns the loss of the profit-loss distribution.
 
         This method should be overridden.
 
         Args:
             input (torch.Tensor): The distribution of the profit and loss.
+            target (torch.Tensor or float, default=0): The target portfolio to replicate.
+                Typically, target is the payoff of a derivative.
 
         Shape:
-            - Input: :math:`(N, *)` where
+            - input: :math:`(N, *)` where
               :math:`*` means any number of additional dimensions.
-            - Output: :math:`(*)`
+            - target: :math:`(N, *)`
+            - output: :math:`(*)`
 
         Returns:
             torch.Tensor
         """
+        pass
 
-    def cash(self, input: Tensor) -> Tensor:
+    def cash(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
         """Returns the cash amount which is as preferable as
         the given profit-loss distribution in terms of the loss.
 
@@ -43,7 +51,7 @@ class HedgeLoss(Module, ABC):
 
         .. code::
 
-            loss(torch.full_like(pnl, cash)) = loss(pnl)
+            loss(torch.full_like(pl, cash)) = loss(pl)
 
         By default, the output is computed by binary search.
         If analytic form is known, it is recommended to override this method
@@ -51,16 +59,20 @@ class HedgeLoss(Module, ABC):
 
         Args:
             input (torch.Tensor): The distribution of the profit and loss.
+            target (torch.Tensor or float, default=0): The target portfolio to replicate.
+                Typically, target is the payoff of a derivative.
 
         Shape:
-            - Input: :math:`(N, *)` where
+            - input: :math:`(N, *)` where
               :math:`*` means any number of additional dimensions.
-            - Output: :math:`(*)`
+            - target: :math:`(N, *)`
+            - output: :math:`(*)`
 
         Returns:
             torch.Tensor
         """
-        return bisect(self, self(input), input.min(), input.max())
+        pl = input - target
+        return bisect(self, self(pl), pl.min(), pl.max())
 
 
 class EntropicRiskMeasure(HedgeLoss):
@@ -68,11 +80,11 @@ class EntropicRiskMeasure(HedgeLoss):
     the entropic risk measure.
 
     The entropic risk measure of the profit-loss distribution
-    :math:`\text{pnl}` is given by:
+    :math:`\text{pl}` is given by:
 
     .. math::
-        \text{loss}(\text{pnl}) = \frac{1}{a}
-        \log(- \mathbf{E}[u(\text{pnl})]) \,,
+        \text{loss}(\text{PL}) = \frac{1}{a}
+        \log(- \mathbf{E}[u(\text{PL})]) \,,
         \quad
         u(x) = -\exp(-a x) \,.
 
@@ -86,13 +98,14 @@ class EntropicRiskMeasure(HedgeLoss):
             This parameter should be positive.
 
     Shape:
-        - Input: :math:`(N, *)` where
+        - input: :math:`(N, *)` where
           :math:`*` means any number of additional dimensions.
-        - Output: :math:`(*)`
+        - target: :math:`(N, *)`
+        - output: :math:`(*)`
 
     Examples:
         >>> from pfhedge.nn import EntropicRiskMeasure
-        >>>
+        ...
         >>> loss = EntropicRiskMeasure()
         >>> input = -torch.arange(4.0)
         >>> loss(input)
@@ -101,7 +114,7 @@ class EntropicRiskMeasure(HedgeLoss):
         tensor(-2.0539)
     """
 
-    def __init__(self, a: float = 1.0):
+    def __init__(self, a: float = 1.0) -> None:
         if not a > 0:
             raise ValueError("Risk aversion coefficient should be positive.")
 
@@ -111,20 +124,20 @@ class EntropicRiskMeasure(HedgeLoss):
     def extra_repr(self) -> str:
         return "a=" + _format_float(self.a) if self.a != 1 else ""
 
-    def forward(self, input: Tensor) -> Tensor:
-        return entropic_risk_measure(input, a=self.a)
+    def forward(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return entropic_risk_measure(input - target, a=self.a)
 
-    def cash(self, input: Tensor) -> Tensor:
-        return -self(input)
+    def cash(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return -self(input - target)
 
 
 class EntropicLoss(HedgeLoss):
     r"""Creates a criterion that measures the expected exponential utility.
 
-    The loss of the profit-loss :math:`\text{pnl}` is given by:
+    The loss of the profit-loss :math:`\text{PL}` is given by:
 
     .. math::
-        \text{loss}(\text{pnl}) = -\mathbf{E}[u(\text{pnl})] \,,
+        \text{loss}(\text{PL}) = -\mathbf{E}[u(\text{PL})] \,,
         \quad
         u(x) = -\exp(-a x) \,.
 
@@ -137,13 +150,14 @@ class EntropicLoss(HedgeLoss):
             the exponential utility.
 
     Shape:
-        - Input: :math:`(N, *)` where
-          :math:`*` means any number of additional dimensions.
-        - Output: :math:`(*)`
+        - input: :math:`(N, *)` where
+            :math:`*` means any number of additional dimensions.
+        - target: :math:`(N, *)`
+        - output: :math:`(*)`
 
     Examples:
         >>> from pfhedge.nn import EntropicLoss
-        >>>
+        ...
         >>> loss = EntropicLoss()
         >>> input = -torch.arange(4.0)
         >>> loss(input)
@@ -152,7 +166,7 @@ class EntropicLoss(HedgeLoss):
         tensor(-2.0539)
     """
 
-    def __init__(self, a: float = 1.0):
+    def __init__(self, a: float = 1.0) -> None:
         if not a > 0:
             raise ValueError("Risk aversion coefficient should be positive.")
 
@@ -162,20 +176,20 @@ class EntropicLoss(HedgeLoss):
     def extra_repr(self) -> str:
         return "a=" + _format_float(self.a) if self.a != 1 else ""
 
-    def forward(self, input: Tensor) -> Tensor:
-        return -exp_utility(input, a=self.a).mean(0)
+    def forward(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return -exp_utility(input - target, a=self.a).mean(0)
 
-    def cash(self, input: Tensor) -> Tensor:
-        return -(-exp_utility(input, a=self.a).mean(0)).log() / self.a
+    def cash(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return -(-exp_utility(input - target, a=self.a).mean(0)).log() / self.a
 
 
 class IsoelasticLoss(HedgeLoss):
     r"""Creates a criterion that measures the expected isoelastic utility.
 
-    The loss of the profit-loss :math:`\text{pnl}` is given by:
+    The loss of the profit-loss :math:`\text{PL}` is given by:
 
     .. math::
-        \text{loss}(\text{pnl}) = -\mathbf{E}[u(\text{pnl})] \,,
+        \text{loss}(\text{PL}) = -\mathbf{E}[u(\text{PL})] \,,
         \quad
         u(x) = \begin{cases}
         x^{1 - a} & a \neq 1 \\
@@ -191,13 +205,14 @@ class IsoelasticLoss(HedgeLoss):
             This parameter should satisfy :math:`0 < a \leq 1`.
 
     Shape:
-        - Input: :math:`(N, *)` where
-          :math:`*` means any number of additional dimensions.
-        - Output: :math:`(*)`
+        - input: :math:`(N, *)` where
+            :math:`*` means any number of additional dimensions.
+        - target: :math:`(N, *)`
+        - output: :math:`(*)`
 
     Examples:
         >>> from pfhedge.nn import IsoelasticLoss
-        >>>
+        ...
         >>> loss = IsoelasticLoss(0.5)
         >>> input = torch.arange(1.0, 5.0)
         >>> loss(input)
@@ -206,14 +221,14 @@ class IsoelasticLoss(HedgeLoss):
         tensor(2.3610)
 
         >>> loss = IsoelasticLoss(1.0)
-        >>> pnl = torch.arange(1.0, 5.0)
+        >>> pl = torch.arange(1.0, 5.0)
         >>> loss(input)
         tensor(-0.7945)
         >>> loss.cash(input)
         tensor(2.2134)
     """
 
-    def __init__(self, a: float):
+    def __init__(self, a: float) -> None:
         if not 0 < a <= 1:
             raise ValueError(
                 "Relative risk aversion coefficient should satisfy 0 < a <= 1."
@@ -225,8 +240,8 @@ class IsoelasticLoss(HedgeLoss):
     def extra_repr(self) -> str:
         return "a=" + _format_float(self.a) if self.a != 1 else ""
 
-    def forward(self, input: Tensor) -> Tensor:
-        return -isoelastic_utility(input, a=self.a).mean(0)
+    def forward(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return -isoelastic_utility(input - target, a=self.a).mean(0)
 
 
 class ExpectedShortfall(HedgeLoss):
@@ -240,13 +255,14 @@ class ExpectedShortfall(HedgeLoss):
             This parameter should satisfy :math:`0 < p \leq 1`.
 
     Shape:
-        - Input: :math:`(N, *)` where
-          :math:`*` means any number of additional dimensions.
-        - Output: :math:`(*)`
+        - input: :math:`(N, *)` where
+            :math:`*` means any number of additional dimensions.
+        - target: :math:`(N, *)`
+        - output: :math:`(*)`
 
     Examples:
         >>> from pfhedge.nn import ExpectedShortfall
-        >>>
+        ...
         >>> loss = ExpectedShortfall(0.5)
         >>> input = -torch.arange(4.0)
         >>> loss(input)
@@ -265,11 +281,65 @@ class ExpectedShortfall(HedgeLoss):
     def extra_repr(self) -> str:
         return str(self.p)
 
-    def forward(self, input: Tensor) -> Tensor:
-        return expected_shortfall(input, p=self.p, dim=0)
+    def forward(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return expected_shortfall(input - target, p=self.p, dim=0)
 
-    def cash(self, input: Tensor) -> Tensor:
-        return -self(input)
+    def cash(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return -self(input - target)
+
+
+class QuadraticCVaR(HedgeLoss):
+    """Creates a criterion that measures the QuadraticCVaR.
+
+    .. math::
+
+        \\rho (X) = \\inf_\\omega \\left\\{\\omega + \\lambda || \\min\\{0, X + \\omega\\}||_2\\right\\}.
+
+    for :math:`\lambda\geq1`.
+
+    References:
+        - Buehler, Hans, Statistical Hedging (March 1, 2019). Available at SSRN: http://dx.doi.org/10.2139/ssrn.2913250
+          (See Conclusion.)
+
+    .. seealso::
+        - :func:`pfhedge.nn.functional.quadratic_cvar`
+
+    Args:
+        lam (float, default=10.0): :math:`\lambda`.
+            This parameter should satisfy :math:`\lambda \geq 1`.
+
+    Shape:
+        - input: :math:`(N, *)` where
+            :math:`*` means any number of additional dimensions.
+        - target: :math:`(N, *)`
+        - output: :math:`(*)`
+
+    Examples:
+        >>> from pfhedge.nn import QuadraticCVaR
+        ...
+        >>> loss = QuadraticCVaR(2.0)
+        >>> input = -torch.arange(10.0)
+        >>> loss(input)
+        tensor(7.9750)
+        >>> loss.cash(input)
+        tensor(-7.9750)
+    """  # NOQA
+
+    def __init__(self, lam: float = 10.0):
+        if not lam >= 1.0:
+            raise ValueError("The lam should satisfy lam >= 1.")
+
+        super().__init__()
+        self.lam = lam
+
+    def extra_repr(self) -> str:
+        return str(self.lam)
+
+    def forward(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return quadratic_cvar(input - target, lam=self.lam, dim=0)
+
+    def cash(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return -self(input - target)
 
 
 class OCE(HedgeLoss):
@@ -278,12 +348,12 @@ class OCE(HedgeLoss):
     The certainty equivalent is given by:
 
     .. math::
-        \\text{loss}(X, w) = w - \\mathrm{E}[u(X + w)]
+        \text{loss}(X, w) = w - \mathrm{E}[u(X + w)]
 
     Minimization of loss gives the optimized certainty equivalent.
 
     .. math::
-        \\rho_u(X) = \\inf_w \\text{loss}(X, w)
+        \rho_u(X) = \inf_w \text{loss}(X, w)
 
     Args:
         utility (callable): Utility function.
@@ -293,13 +363,13 @@ class OCE(HedgeLoss):
 
     Examples:
         >>> from pfhedge.nn.modules.loss import OCE
-        >>>
+        ...
         >>> _ = torch.manual_seed(42)
         >>> m = OCE(lambda x: 1 - (-x).exp())
-        >>> pnl = torch.randn(10)
-        >>> m(pnl)
+        >>> pl = torch.randn(10)
+        >>> m(pl)
         tensor(0.0855, grad_fn=<SubBackward0>)
-        >>> m.cash(pnl)
+        >>> m.cash(pl)
         tensor(-0.0821)
     """
 
@@ -313,5 +383,5 @@ class OCE(HedgeLoss):
         w = float(self.w.item())
         return self.utility.__name__ + ", w=" + _format_float(w)
 
-    def forward(self, input: Tensor) -> Tensor:
-        return self.w - self.utility(input + self.w).mean(0)
+    def forward(self, input: Tensor, target: TensorOrScalar = 0.0) -> Tensor:
+        return self.w - self.utility(input - target + self.w).mean(0)

@@ -25,6 +25,8 @@ class BrownianStock(BasePrimary):
     Args:
         sigma (float, default=0.2): The parameter :math:`\sigma`,
             which stands for the volatility of the spot price.
+        mu (float, default=0.0): The parameter :math:`\mu`,
+            which stands for the drift of the spot price.
         cost (float, default=0.0): The transaction cost rate.
         dt (float, default=1/250): The intervals of the time steps.
         dtype (torch.device, optional): Desired device of returned tensor.
@@ -63,14 +65,16 @@ class BrownianStock(BasePrimary):
     def __init__(
         self,
         sigma: float = 0.2,
+        mu: float = 0.0,
         cost: float = 0.0,
         dt: float = 1 / 250,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-    ):
+    ) -> None:
         super().__init__()
 
         self.sigma = sigma
+        self.mu = mu
         self.cost = cost
         self.dt = dt
 
@@ -86,7 +90,7 @@ class BrownianStock(BasePrimary):
 
         It is a tensor filled with ``self.sigma``.
         """
-        return torch.full_like(self.spot, self.sigma)
+        return torch.full_like(self.get_buffer("spot"), self.sigma)
 
     @property
     def variance(self) -> Tensor:
@@ -94,7 +98,7 @@ class BrownianStock(BasePrimary):
 
         It is a tensor filled with the square of ``self.sigma``.
         """
-        return torch.full_like(self.spot, self.sigma ** 2)
+        return torch.full_like(self.get_buffer("spot"), self.sigma ** 2)
 
     def simulate(
         self,
@@ -121,7 +125,6 @@ class BrownianStock(BasePrimary):
                 It also accepts a :class:`float` or a :class:`torch.Tensor`.
 
         Examples:
-
             >>> _ = torch.manual_seed(42)
             >>> stock = BrownianStock()
             >>> stock.simulate(n_paths=2, time_horizon=5 / 250, init_state=(2.0,))
@@ -137,6 +140,7 @@ class BrownianStock(BasePrimary):
             n_steps=ceil(time_horizon / self.dt + 1),
             init_state=init_state,
             sigma=self.sigma,
+            mu=self.mu,
             dt=self.dt,
             dtype=self.dtype,
             device=self.device,
@@ -146,6 +150,8 @@ class BrownianStock(BasePrimary):
 
     def extra_repr(self) -> str:
         params = ["sigma=" + _format_float(self.sigma)]
+        if self.mu != 0.0:
+            params.append("mu=" + _format_float(self.mu))
         if self.cost != 0.0:
             params.append("cost=" + _format_float(self.cost))
         params.append("dt=" + _format_float(self.dt))

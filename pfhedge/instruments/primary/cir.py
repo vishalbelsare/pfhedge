@@ -14,16 +14,16 @@ from .base import BasePrimary
 
 
 class CIRRate(BasePrimary):
-    """A rate which follow the CIR process.
+    r"""A rate which follow the CIR process.
 
     .. seealso::
         - :func:`pfhedge.stochastic.generate_cir`:
           The stochastic process.
 
     Args:
-        kappa (float, default=1.0): The parameter :math:`\\kappa`.
-        theta (float, default=0.04): The parameter :math:`\\theta`.
-        sigma (float, default=2.0): The parameter :math:`\\sigma`.
+        kappa (float, default=1.0): The parameter :math:`\kappa`.
+        theta (float, default=0.04): The parameter :math:`\theta`.
+        sigma (float, default=2.0): The parameter :math:`\sigma`.
         cost (float, default=0.0): The transaction cost rate.
         dt (float, default=1/250): The intervals of the time steps.
         dtype (torch.device, optional): Desired device of returned tensor.
@@ -43,9 +43,8 @@ class CIRRate(BasePrimary):
           :math:`T` is the number of time steps.
 
     Examples:
-
-        >>> from pfhedge.instruments import HestonStock
-        >>>
+        >>> from pfhedge.instruments import CIRRate
+        ...
         >>> _ = torch.manual_seed(42)
         >>> rate = CIRRate()
         >>> rate.simulate(n_paths=2, time_horizon=5/250)
@@ -63,7 +62,7 @@ class CIRRate(BasePrimary):
         dt: float = 1 / 250,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-    ):
+    ) -> None:
         super().__init__()
 
         self.kappa = kappa

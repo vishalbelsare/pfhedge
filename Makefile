@@ -2,7 +2,7 @@ PROJECT_NAME := pfhedge
 RUN := poetry run
 
 .PHONY: check
-check: test lint mypy
+check: test lint-pysen
 
 .PHONY: install
 install:
@@ -13,18 +13,18 @@ test: doctest pytest
 
 .PHONY: doctest
 doctest:
-	$(RUN) pytest --doctest-modules $(PROJECT_NAME)
+	$(RUN) pytest --doctest-modules $(PROJECT_NAME) -m "not gpu"
 
 .PHONY: pytest
 pytest:
-	$(RUN) pytest --doctest-modules tests
+	$(RUN) pytest --doctest-modules tests -m "not gpu"
 
 .PHONY: test-cov
 test-cov:
-	$(RUN) pytest --cov=$(PROJECT_NAME) --cov-report=html
+	$(RUN) pytest --cov=$(PROJECT_NAME) --cov-report=xml -m "not gpu"
 
 .PHONY: lint
-lint: lint-black lint-isort
+lint: lint-black lint-isort flake8 mypy
 
 .PHONY: lint-black
 lint-black:
@@ -38,12 +38,16 @@ lint-isort:
 mypy:
 	$(RUN) mypy $(PROJECT_NAME)
 
+.PHONY: flake8
+flake8:
+	$(RUN) pflake8 $(PROJECT_NAME)
+
 .PHONY: format
 format: format-black format-isort
 
 .PHONY: format-black
 format-black:
-	$(RUN) black --quiet --skip-magic-trailing-comma .
+	$(RUN) black --quiet .
 
 .PHONY: format-isort
 format-isort:
